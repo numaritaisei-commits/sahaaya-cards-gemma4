@@ -1,7 +1,11 @@
 import hashlib
 import json
 import re
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import validate_project as validator
 
@@ -240,6 +244,44 @@ class ProjectValidatorTests(unittest.TestCase):
     def test_public_cover_is_bounded_canonical_png(self):
         self.assertEqual(validator.validate_binary_assets(), [])
 
+    def test_public_video_tampering_type_and_size_fail_closed(self):
+        source_assets = validator.ROOT / "assets"
+        for case in ("tamper", "type", "size"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                assets = root / "assets"
+                assets.mkdir()
+                shutil.copyfile(source_assets / "cover.png", assets / "cover.png")
+                video = assets / "sahaaya-cards-fixture-prototype.mp4"
+                shutil.copyfile(source_assets / video.name, video)
+                with video.open("r+b") as handle:
+                    if case == "tamper":
+                        handle.seek(-1, 2)
+                        final = handle.read(1)
+                        handle.seek(-1, 2)
+                        handle.write(bytes([final[0] ^ 1]))
+                    elif case == "type":
+                        handle.seek(4)
+                        handle.write(b"nope")
+                    else:
+                        handle.truncate(validator.PUBLIC_VIDEO_MAX_BYTES + 1)
+                with mock.patch.object(validator, "ROOT", root):
+                    errors = validator.validate_binary_assets()
+                self.assertTrue(errors)
+
+    def test_public_docs_label_fixture_video_truthfully(self):
+        for name in (
+            "README.md",
+            "WRITEUP_DRAFT.md",
+            "SECURITY_AND_PRIVACY.md",
+            "ILLUSTRATIVE_OUTPUT.md",
+        ):
+            with self.subTest(name=name):
+                text = (validator.ROOT / name).read_text(encoding="utf-8")
+                self.assertIn("sahaaya-cards-fixture-prototype.mp4", text)
+                self.assertIn("hand-authored", text.lower())
+                self.assertRegex(text.lower(), r"not (?:a )?model")
+
     def test_public_notebook_discloses_failed_runtime_evidence(self):
         notebook = validator.load_json(validator.ROOT / validator.NOTEBOOK_NAME)
         status_note = "".join(notebook["cells"][0]["source"])
@@ -251,6 +293,25 @@ class ProjectValidatorTests(unittest.TestCase):
             "not model-generated",
         ):
             self.assertIn(phrase, status_note)
+
+    def test_public_docs_separate_version7_jax_diagnostic_from_app(self):
+        for name in (
+            "README.md",
+            "WRITEUP_DRAFT.md",
+            "SECURITY_AND_PRIVACY.md",
+            "DEPENDENCIES.md",
+        ):
+            with self.subTest(name=name):
+                text = (validator.ROOT / name).read_text(encoding="utf-8")
+                self.assertIn("Version 7", text)
+                self.assertIn("JAX", text)
+                self.assertIn("452.703", text)
+                self.assertIn("DIAGNOSTIC_FAILURE", text)
+                self.assertIn("model_load_started", text)
+
+        readme = (validator.ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Keras/Torch two-pass app", readme)
+        self.assertIn("no generation or Sahaaya Cards app pass occurred", readme)
 
     def test_publication_scan_rejects_pii_secret_and_local_path(self):
         sample = (
