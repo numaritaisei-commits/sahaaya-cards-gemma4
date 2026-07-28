@@ -1,0 +1,13 @@
+{
+  "archive_bytes": 1525623,
+  "member_count": 766,
+  "native_payloads": 0,
+  "record_entries_verified": 765,
+  "sha256": "a28cb601f7fffb7f28add1bae8110459fc3ac7d9e2159453dfbda9e97271fc87",
+  "source": "PyPI keras-hub 0.28.0",
+  "source_tag": "keras-team/keras-hub v0.28.0",
+  "source_commit": "30788bad4ff18dd255d4ae0a58456f6ee3831d8c",
+  "status": "PASS",
+  "symlinks": 0,
+  "uncompressed_bytes": 5887722
+}
