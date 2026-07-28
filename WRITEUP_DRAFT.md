@@ -66,20 +66,36 @@ untrusted data, reject duplicate keys, and remain hidden from notebook logs.
 ## Measured runtime evidence — incomplete
 
 This submission does **not** claim that Gemma 4 generated or verified a card.
-Three Private, Internet-disabled Kaggle T4 x2 development attempts were made:
+The Keras/Torch two-pass app had three Private, Internet-disabled Kaggle T4 x2
+development attempts:
 
 - V4 ended during direct GPU model loading with an out-of-memory error.
 - V5 attempted CPU staging and was killed after host memory exhaustion.
 - V6 also failed to reach validated end-to-end generation under the available memory.
 
+Separately, Version 7 tested a JAX model-parallel loading route; it was not the
+two-pass app. The official run was Private, Internet-disabled, T4 x2, and used
+only the official competition input, pinned official Gemma 4 model, and audited
+wheel Dataset. Its exact source, server-normalized metadata, and extracted
+vendor tree passed the dedicated validator. The runtime report was
+`DIAGNOSTIC_FAILURE` / `ValueError` at `model_load_started` after 452.703
+seconds. Weight loading never completed, so this smoke produced no generation,
+fact ledger, multilingual card, verification pass, or app artifact.
+
 No attempt produced a validator-approved `demo_results.json`; therefore there
 is no model PASS rate, generation timing, translation-quality score, validated
-video, or measured impact to report. The hand-authored
+model-output video, or measured impact to report. The hand-authored
 `ILLUSTRATIVE_OUTPUT.md` demonstrates only the proposed interface and is
 prominently labeled **not model-generated**.
 
-Executing the reviewed full candidate requires more memory than the tested
-free T4 x2 routes supplied, or another officially supported Gemma 4 environment.
+The [114-second silent fixture walkthrough](assets/sahaaya-cards-fixture-prototype.mp4)
+uses the same two fictional notices and keeps that evidence boundary visible in
+every scene. It is hand-authored illustrative media, not model output, a
+validated translation, or proof of a successful runtime.
+
+The validated Version 7 provenance does not convert a loading failure into an
+application success. Completing the reviewed Keras/Torch app still requires a
+supported route that finishes weight loading and both model passes.
 
 ## Value and responsible boundaries
 

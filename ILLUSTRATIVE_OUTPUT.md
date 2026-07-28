@@ -30,4 +30,6 @@ A future model-generated card may be displayed only when the Private,
 Internet-disabled notebook finishes both Gemma 4 passes, the downloaded result
 passes the exact-quote and complete-verifier checks, and its runtime journal
 binds the exact artifact hash. Until then, this illustrative page is the only
-output-like material in the repository.
+output-like text in the repository. The companion 114-second silent fixture
+walkthrough in `assets/sahaaya-cards-fixture-prototype.mp4` is likewise
+hand-authored, not model-generated, and not runtime evidence.

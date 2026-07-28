@@ -8,9 +8,29 @@ The prototype is intentionally narrow: it summarizes a supplied notice. It does 
 
 ## Current evidence status
 
-The Gemma 4 candidate is **implemented and statically reviewable, but not runtime-proven**. Three Private, Internet-disabled Kaggle T4 x2 development attempts remained incomplete under the available memory. V4 ended during direct GPU model loading with an out-of-memory error. V5 was killed during CPU staging after host memory exhaustion. V6 also failed to reach validated end-to-end generation. None produced a validator-approved Gemma result.
+The Keras/Torch two-pass app candidate is **implemented and statically
+reviewable, but not runtime-proven**. Its three Private, Internet-disabled
+Kaggle T4 x2 attempts remained incomplete: V4 ended during direct GPU model
+loading with an out-of-memory error, V5 was killed during CPU staging after
+host memory exhaustion, and V6 did not reach validated end-to-end generation.
 
-Accordingly, this repository claims no generated card, successful runtime, PASS rate, translation quality, or measured social impact. The visual example in `ILLUSTRATIVE_OUTPUT.md` is hand-authored solely to explain the interface and is **not model-generated**. Running the reviewed code requires more memory than those tested routes supplied, or another officially supported Gemma 4 environment.
+A separate JAX model-parallel smoke, Version 7, ran on an official Private,
+Internet-disabled T4 x2 session with only the official competition input,
+pinned official Gemma 4 model, and audited wheel Dataset. Its exact source,
+server-normalized metadata, and extracted pure-Python vendor tree passed the
+dedicated validator. The bounded runtime itself ended after 452.703 seconds as
+`DIAGNOSTIC_FAILURE` / `ValueError` at `model_load_started`. Model weight loading
+did not complete; no generation or Sahaaya Cards app pass occurred.
+
+Accordingly, this repository claims no generated card, successful app runtime,
+PASS rate, translation quality, or measured social impact. The visual example
+in `ILLUSTRATIVE_OUTPUT.md` is hand-authored solely to explain the interface and
+is **not model-generated**. Version 7 is diagnostic evidence for a distinct JAX
+loading route, not evidence for the Keras/Torch two-pass application.
+
+[Watch the 114-second silent fixture walkthrough](assets/sahaaya-cards-fixture-prototype.mp4).
+It is a hand-authored, fixture-only visualization of the proposed interface—not
+model output, a validated translation, or evidence of a successful runtime.
 
 ## Why this matters
 
@@ -42,9 +62,18 @@ The implementation defines two separate calls with separate outputs. If generati
 
 The notebook does not blindly install the KerasHub wheel. Before import it checks the pinned archive SHA-256, size bounds, pure-Python tag, canonical path and directory encoding, regular-file type, a narrow file-suffix allowlist, complete wheel `RECORD`, and every recorded member digest. It extracts to a new local directory, verifies the extracted inventory again, and confirms that the imported KerasHub 0.28.0 package came from that directory. It separately inspects bounded model JSON and the attached inventory for `Gemma4Backbone`, `Gemma4CausalLM`, and the expected shards before loading `Gemma4CausalLM.from_preset(..., dtype="float16")`.
 
+This contract describes the public Keras/Torch two-pass app. The separate
+Version 7 JAX smoke used the same pinned official model and audited wheel to
+test model-parallel loading only; it did not execute either app prompt or
+produce a card artifact.
+
 Generation uses a 2048-token total-sequence budget and verification uses 3072; the official tokenizer must prove that at least 512 completion tokens remain before either call. TensorFlow GPU visibility is disabled before Keras import, Torch must see exactly two T4 GPUs, and the reviewed variables must be plain `float16` on `cuda:0`. An atomic `runtime_journal.json` records only bounded status, counts, failure class, and hashes. Model JSON and model-returned JSON are bounded, duplicate object keys and undeclared schema fields are rejected, and each strict-JSON raw final answer must be semantically identical to its parsed object before rendering.
 
-These are source-level implementation facts, not runtime-success evidence. V4-V6 demonstrate that the tested free-memory configurations were insufficient. There is no alternate model, network install, fabricated result, or unverified fallback.
+These are source-level implementation facts, not runtime-success evidence.
+V4-V6 show that the tested Keras/Torch memory routes were insufficient; Version
+7 shows only a validated JAX diagnostic that reached `model_load_started` and
+then failed closed. There is no alternate model, network install, fabricated
+result, or unverified fallback.
 
 ## Reproducible artifact chain
 
@@ -57,6 +86,7 @@ These are source-level implementation facts, not runtime-success evidence. V4-V6
 - `build_demo.py` — standard-library-only offline HTML renderer; refuses absent or failing runtime artifacts
 - `tests/` — validator and renderer refusal/escaping tests
 - `ILLUSTRATIVE_OUTPUT.md` — hand-authored, non-model-generated interface example with a visible evidence chain and explicit warning banner
+- `assets/sahaaya-cards-fixture-prototype.mp4` — 114-second silent, hand-authored fixture walkthrough with persistent evidence-boundary labels; not model output or runtime evidence
 - `WRITEUP_DRAFT.md` — judge-facing draft that reports the memory-limited runtime evidence without placeholders or fabricated results
 - `tools/` and `dependencies/` — wheel audit implementation, audit result, and upstream license; the wheel itself is excluded
 - `schemas/` — machine-readable private runtime-artifact contract

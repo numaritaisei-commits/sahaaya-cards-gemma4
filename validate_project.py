@@ -23,6 +23,9 @@ WHEEL_DATASET_SLUG = "verified-keras-hub-028-gemma4"
 WHEEL_DATASET_REF = f"{OWNER_PLACEHOLDER}/{WHEEL_DATASET_SLUG}"
 KERNEL_METADATA_NAME = "kernel-metadata.example.json"
 WHEEL_SHA256 = "a28cb601f7fffb7f28add1bae8110459fc3ac7d9e2159453dfbda9e97271fc87"
+PUBLIC_VIDEO_PATH = "assets/sahaaya-cards-fixture-prototype.mp4"
+PUBLIC_VIDEO_SHA256 = "0d74053c174cd87e5e6624fc7b9cbf13b6de1bc198d76c8a786526e4efd094b9"
+PUBLIC_VIDEO_MAX_BYTES = 20_000_000
 FORBIDDEN_NOTEBOOK_TOKENS = (
     "Gemma3CausalLM",
     "gemma3_instruct",
@@ -49,6 +52,7 @@ MANIFEST_TARGETS = {
     "ILLUSTRATIVE_OUTPUT.md",
     "SECURITY_AND_PRIVACY.md",
     "assets/cover.png",
+    PUBLIC_VIDEO_PATH,
     "build_demo.py",
     "dataset-metadata.example.json",
     "dependencies/LICENSE.keras-hub.txt",
@@ -68,7 +72,7 @@ MANIFEST_TARGETS = {
     "tools/audit_wheel.py",
     "validate_project.py",
 }
-BINARY_PUBLICATION_TARGETS = {"assets/cover.png"}
+BINARY_PUBLICATION_TARGETS = {"assets/cover.png", PUBLIC_VIDEO_PATH}
 
 BANNED_IMPORT_ROOTS = {
     "aiohttp",
@@ -194,28 +198,42 @@ def validate_publication_sources() -> list[str]:
 
 
 def validate_binary_assets() -> list[str]:
-    """Validate the bounded public cover without decoding arbitrary data."""
+    """Validate bounded, fixed-hash public media without decoding it."""
     errors: list[str] = []
     for relative in sorted(BINARY_PUBLICATION_TARGETS):
         path = ROOT / relative
         if not path.is_file() or path.is_symlink():
             errors.append(f"binary asset is missing, non-file, or symlink: {relative}")
             continue
-        if path.stat().st_size > 4_000_000:
-            errors.append(f"binary asset exceeds size limit: {relative}")
-            continue
-        with path.open("rb") as handle:
-            header = handle.read(24)
-        if (
-            len(header) != 24
-            or header[:8] != b"\x89PNG\r\n\x1a\n"
-            or header[12:16] != b"IHDR"
-        ):
-            errors.append(f"binary asset is not a canonical PNG: {relative}")
-            continue
-        width, height = struct.unpack(">II", header[16:24])
-        if (width, height) != (1120, 560):
-            errors.append(f"binary asset dimensions mismatch: {relative}")
+        if relative == "assets/cover.png":
+            if path.stat().st_size > 4_000_000:
+                errors.append(f"binary asset exceeds size limit: {relative}")
+                continue
+            with path.open("rb") as handle:
+                header = handle.read(24)
+            if (
+                len(header) != 24
+                or header[:8] != b"\x89PNG\r\n\x1a\n"
+                or header[12:16] != b"IHDR"
+            ):
+                errors.append(f"binary asset is not a canonical PNG: {relative}")
+                continue
+            width, height = struct.unpack(">II", header[16:24])
+            if (width, height) != (1120, 560):
+                errors.append(f"binary asset dimensions mismatch: {relative}")
+        elif relative == PUBLIC_VIDEO_PATH:
+            if not 0 < path.stat().st_size <= PUBLIC_VIDEO_MAX_BYTES:
+                errors.append(f"binary asset exceeds size limit: {relative}")
+                continue
+            with path.open("rb") as handle:
+                header = handle.read(12)
+            if len(header) != 12 or header[4:8] != b"ftyp":
+                errors.append(f"binary asset is not a bounded MP4: {relative}")
+                continue
+            if sha256_file(path) != PUBLIC_VIDEO_SHA256:
+                errors.append(f"binary asset SHA-256 mismatch: {relative}")
+        else:
+            errors.append(f"unknown binary publication target: {relative}")
     return errors
 
 
@@ -1111,7 +1129,7 @@ def run_static_checks(
         if journal_path is not None:
             errors.append("--journal cannot be validated without --runtime")
         warnings.append(
-            "no validated model artifact exists; V4-V6 remained incomplete under the available Kaggle T4x2 memory"
+            "no validated app artifact exists; V4-V6 memory routes and the separate V7 JAX weighted-load diagnostic did not complete"
         )
         checks["runtime_artifact"] = "NOT_RUN"
 
