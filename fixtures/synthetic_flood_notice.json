@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "notice_id": "SYN-FLOOD-001",
+  "synthetic": true,
+  "issuer": "Sample River Ward Emergency Desk",
+  "issued_at": "2030-07-18T06:30:00+05:30",
+  "title": "Practice notice: river footbridge closure",
+  "body": "This is a fictional practice notice. The River Ward footbridge will remain closed from 08:00 on 18 July 2030 until 18:00 on 19 July 2030 because of a high-water drill. Pedestrians should use the marked Market Road crossing. Do not enter the closed footbridge area. A staffed help desk will operate at the Sample Community Hall from 09:00 to 17:00 on both days. If conditions change, the Sample River Ward Emergency Desk will issue a new notice.",
+  "source_language": "en"
+}

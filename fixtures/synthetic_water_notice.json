@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "notice_id": "SYN-WATER-002",
+  "synthetic": true,
+  "issuer": "Example Lakeside Civic Office",
+  "issued_at": "2031-02-10T14:15:00+05:30",
+  "title": "Practice notice: scheduled water interruption",
+  "body": "This is a fictional practice notice. Piped water service in Blocks A and B of Example Lakeside will pause from 10:00 to 14:00 on 12 February 2031 for valve maintenance. Residents may store only the water they reasonably need before 10:00. The temporary collection point at Example School Gate will be open from 11:00 to 13:30. Bring a clean container. Water service is expected to resume after 14:00, but residents should wait for the official restoration notice before assuming service is safe to use.",
+  "source_language": "en"
+}
