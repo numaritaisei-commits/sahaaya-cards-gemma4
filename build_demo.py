@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent
 DEFAULT_INPUT = ROOT / "demo_results.json"
 DEFAULT_OUTPUT = ROOT / "demo" / "index.html"
 MAX_ARTIFACT_BYTES = 4_000_000
+MAX_RAW_FINAL_UTF8_BYTES = 131_072
 LANGUAGE_LABELS = {"en": "English", "hi": "हिन्दी", "ta": "தமிழ்"}
 ALLOWED_FACT_KINDS = {
     "time",
@@ -44,6 +45,46 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise DemoRefusal(f"duplicate JSON key: {key}")
         result[key] = value
     return result
+
+
+def _reject_non_finite(token: str) -> None:
+    raise DemoRefusal(f"non-finite JSON number is forbidden: {token}")
+
+
+def _exact_object(value: Any, field: str, keys: set[str]) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != keys:
+        raise DemoRefusal(f"field inventory mismatch: {field}")
+    return value
+
+
+def _parse_raw_object(value: Any, field: str) -> dict[str, Any]:
+    raw = _text(value, field, maximum=MAX_RAW_FINAL_UTF8_BYTES)
+    if len(raw.encode("utf-8")) > MAX_RAW_FINAL_UTF8_BYTES:
+        raise DemoRefusal(f"raw final answer exceeds byte limit: {field}")
+    try:
+        parsed = json.loads(
+            raw,
+            object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=_reject_non_finite,
+        )
+    except (json.JSONDecodeError, DemoRefusal) as exc:
+        raise DemoRefusal(f"raw final answer is not strict JSON: {field}") from exc
+    if not isinstance(parsed, dict):
+        raise DemoRefusal(f"raw final answer must be a JSON object: {field}")
+    return parsed
+
+
+def _canonical_json(value: Any, field: str) -> str:
+    try:
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise DemoRefusal(f"non-canonical JSON value: {field}") from exc
 
 
 def _text(value: Any, field: str, *, maximum: int = 4000) -> str:
@@ -101,25 +142,80 @@ def _fixture_map() -> dict[str, dict[str, Any]]:
 def _normalize_notice(
     result: dict[str, Any], fixture: dict[str, Any]
 ) -> dict[str, Any]:
+    _exact_object(
+        result,
+        "notice",
+        {
+            "notice_id",
+            "source_sha256",
+            "prompts",
+            "raw_final_answers",
+            "parsed",
+            "token_budgets",
+            "timing_seconds",
+            "validation",
+        },
+    )
     notice_id = _text(result.get("notice_id"), "notice_id", maximum=40)
     expected_source_hash = hashlib.sha256(
         json.dumps(fixture, ensure_ascii=False, sort_keys=True).encode("utf-8")
     ).hexdigest()
     if result.get("source_sha256") != expected_source_hash:
         raise DemoRefusal("source hash does not match the trusted synthetic fixture")
-    validation = result.get("validation")
-    if not isinstance(validation, dict):
-        raise DemoRefusal("notice validation record is missing")
+    prompts = _exact_object(
+        result.get("prompts"),
+        "prompts",
+        {"generator", "verifier"},
+    )
+    for role in ("generator", "verifier"):
+        _text(prompts[role], f"prompts.{role}", maximum=MAX_RAW_FINAL_UTF8_BYTES)
+
+    validation = _exact_object(
+        result.get("validation"),
+        "validation",
+        {"passed", "errors"},
+    )
     if validation.get("passed") is not True or validation.get("errors") != []:
         raise DemoRefusal("notice did not pass the deterministic runtime gate")
 
-    parsed = result.get("parsed")
-    if not isinstance(parsed, dict):
-        raise DemoRefusal("parsed result is missing")
+    parsed = _exact_object(
+        result.get("parsed"),
+        "parsed",
+        {"generator", "verifier"},
+    )
     bundle = parsed.get("generator")
     verification = parsed.get("verifier")
     if not isinstance(bundle, dict) or not isinstance(verification, dict):
         raise DemoRefusal("parsed generator or verifier result is missing")
+    _exact_object(
+        bundle,
+        "parsed.generator",
+        {"notice_id", "fact_ledger", "cards", "uncertainties"},
+    )
+    _exact_object(
+        verification,
+        "parsed.verifier",
+        {
+            "notice_id",
+            "verdict",
+            "checks",
+            "unsupported_claims",
+            "language_warnings",
+            "safety_note",
+        },
+    )
+    raw_answers = _exact_object(
+        result.get("raw_final_answers"),
+        "raw_final_answers",
+        {"generator", "verifier"},
+    )
+    for role, normalized in (("generator", bundle), ("verifier", verification)):
+        raw_parsed = _parse_raw_object(
+            raw_answers[role],
+            f"raw_final_answers.{role}",
+        )
+        if _canonical_json(raw_parsed, role) != _canonical_json(normalized, role):
+            raise DemoRefusal(f"raw and parsed {role} answers differ")
     if bundle.get("notice_id") != notice_id or verification.get("notice_id") != notice_id:
         raise DemoRefusal("parsed notice IDs do not match")
 
@@ -133,8 +229,11 @@ def _normalize_notice(
     known_ids: set[str] = set()
     expected_claims: dict[str, set[str]] = {}
     for index, raw_fact in enumerate(ledger_value):
-        if not isinstance(raw_fact, dict):
-            raise DemoRefusal("fact ledger item must be an object")
+        _exact_object(
+            raw_fact,
+            f"facts[{index}]",
+            {"fact_id", "kind", "value", "source_quote"},
+        )
         fact_id = _text(raw_fact.get("fact_id"), f"facts[{index}].fact_id", maximum=12)
         if not FACT_ID_RE.fullmatch(fact_id) or fact_id in known_ids:
             raise DemoRefusal("fact IDs must be unique F-number identifiers")
@@ -155,8 +254,11 @@ def _normalize_notice(
     cards_by_language: dict[str, dict[str, Any]] = {}
     used_ids: set[str] = set()
     for card_index, raw_card in enumerate(cards_value):
-        if not isinstance(raw_card, dict):
-            raise DemoRefusal("card must be an object")
+        _exact_object(
+            raw_card,
+            f"cards[{card_index}]",
+            {"language", "headline", "source_fact_ids", "actions", "do_not_infer"},
+        )
         language = _text(raw_card.get("language"), f"cards[{card_index}].language", maximum=2)
         if language not in LANGUAGE_LABELS or language in cards_by_language:
             raise DemoRefusal("card languages must be exactly en, hi, and ta")
@@ -173,8 +275,11 @@ def _normalize_notice(
             raise DemoRefusal("each card must contain exactly one action")
         actions: list[dict[str, Any]] = []
         for action_index, raw_action in enumerate(actions_value):
-            if not isinstance(raw_action, dict):
-                raise DemoRefusal("card action must be an object")
+            _exact_object(
+                raw_action,
+                f"cards[{card_index}].actions[{action_index}]",
+                {"text", "fact_ids"},
+            )
             action_text = _text(
                 raw_action.get("text"),
                 f"cards[{card_index}].actions[{action_index}].text",
@@ -227,8 +332,11 @@ def _normalize_notice(
         raise DemoRefusal("verifier check coverage is incomplete")
     observed_paths: set[str] = set()
     for index, raw_check in enumerate(checks_value):
-        if not isinstance(raw_check, dict):
-            raise DemoRefusal("verifier check must be an object")
+        _exact_object(
+            raw_check,
+            f"checks[{index}]",
+            {"claim_path", "supported", "fact_ids", "explanation"},
+        )
         claim_path = _text(raw_check.get("claim_path"), f"checks[{index}].claim_path", maximum=100)
         if claim_path not in expected_claims or claim_path in observed_paths:
             raise DemoRefusal("verifier claim path is unknown or duplicated")
@@ -254,9 +362,25 @@ def _normalize_notice(
         maximum_items=12,
         maximum_chars=800,
     )
-    timing = result.get("timing_seconds")
-    if not isinstance(timing, dict):
-        raise DemoRefusal("timing record is missing")
+    budgets = _exact_object(
+        result.get("token_budgets"),
+        "token_budgets",
+        {"generator", "verifier"},
+    )
+    budget_keys = {
+        "completion_budget_tokens",
+        "max_length",
+        "minimum_completion_tokens",
+        "prompt_tokens",
+    }
+    for role in ("generator", "verifier"):
+        _exact_object(budgets.get(role), f"token_budgets.{role}", budget_keys)
+
+    timing = _exact_object(
+        result.get("timing_seconds"),
+        "timing_seconds",
+        {"generator", "verifier", "total"},
+    )
     normalized_timing: dict[str, float] = {}
     for key in ("generator", "verifier", "total"):
         value = timing.get(key)
@@ -291,6 +415,7 @@ def _load_and_normalize(source: Path) -> tuple[dict[str, Any], str]:
         artifact = json.loads(
             raw_bytes.decode("utf-8"),
             object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=_reject_non_finite,
         )
     except (UnicodeDecodeError, json.JSONDecodeError, DemoRefusal) as exc:
         raise DemoRefusal("runtime artifact is not valid UTF-8 JSON") from exc
@@ -299,6 +424,23 @@ def _load_and_normalize(source: Path) -> tuple[dict[str, Any], str]:
         raise DemoRefusal(
             f"runtime artifact failed the authoritative validator ({len(runtime_errors)} findings)"
         )
+    _exact_object(
+        artifact,
+        "runtime artifact",
+        {
+            "schema_version",
+            "project",
+            "generated_at_utc",
+            "status",
+            "model_ref",
+            "model_path",
+            "run_configuration",
+            "runtime_provenance",
+            "safety_limitations",
+            "failures",
+            "notices",
+        },
+    )
     fixtures = _fixture_map()
     runtime_notices = artifact["notices"]
     notices_by_id = {result["notice_id"]: result for result in runtime_notices}

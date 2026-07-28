@@ -6,6 +6,7 @@
   "kernel_type": "notebook",
   "is_private": true,
   "enable_gpu": true,
+  "machine_shape": "nvidiaTeslaT4",
   "enable_internet": false,
   "dataset_sources": [
     "YOUR_KAGGLE_USERNAME/verified-keras-hub-028-gemma4"

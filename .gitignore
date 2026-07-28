@@ -18,5 +18,5 @@ outputs/
 generated/
 frames/
 *.mp4
+!assets/sahaaya-cards-fixture-prototype.mp4
 *.srt
-

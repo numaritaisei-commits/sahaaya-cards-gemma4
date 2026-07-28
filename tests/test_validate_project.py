@@ -1,5 +1,11 @@
 import hashlib
+import json
+import re
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import validate_project as validator
 
@@ -14,6 +20,20 @@ def valid_runtime_artifact():
                 "prompts": {"generator": "generator prompt", "verifier": "verifier prompt"},
                 "raw_final_answers": {"generator": "{}", "verifier": "{}"},
                 "parsed": {"generator": {}, "verifier": {}},
+                "token_budgets": {
+                    "generator": {
+                        "completion_budget_tokens": 1948,
+                        "max_length": 2048,
+                        "minimum_completion_tokens": 512,
+                        "prompt_tokens": 100,
+                    },
+                    "verifier": {
+                        "completion_budget_tokens": 2872,
+                        "max_length": 3072,
+                        "minimum_completion_tokens": 512,
+                        "prompt_tokens": 200,
+                    },
+                },
                 "timing_seconds": {"generator": 1.0, "verifier": 1.0, "total": 2.0},
                 "validation": {"passed": True, "errors": []},
             }
@@ -22,23 +42,69 @@ def valid_runtime_artifact():
         "schema_version": "1.0",
         "project": "Sahaaya Cards",
         "generated_at_utc": "2030-01-01T00:00:00+00:00",
+        "status": "PASS",
         "model_ref": validator.MODEL_REF,
         "model_path": validator.MODEL_PATH,
         "run_configuration": {
             "framework": "keras_hub",
-            "backend": "jax",
+            "backend": "torch",
             "weight_dtype": "float16",
             "keras_hub_version": "0.28.0",
-            "wheel_dataset_ref": validator.WHEEL_DATASET_REF,
+            "wheel_dataset_ref": f"testowner/{validator.WHEEL_DATASET_SLUG}",
             "wheel_sha256": validator.WHEEL_SHA256,
-            "max_length": 2048,
+            "generator_max_length": 2048,
+            "verifier_max_length": 3072,
+            "minimum_completion_tokens": 512,
             "sampler": "greedy",
             "strip_prompt": True,
-            "tensorflow_gpu_growth": True,
+            "gpu": "T4x2",
+            "tensorflow_gpu_visible": False,
             "internet_enabled": False,
             "external_apis": False,
         },
+        "runtime_provenance": {
+            "backend": "torch",
+            "explicit_model_dtype": "float16",
+            "global_policy": "float16",
+            "gpu": "T4x2",
+            "gpu_count": 2,
+            "keras_hub_version": "0.28.0",
+            "load_seconds": 120.0,
+            "memory_after_load": {
+                "allocated_bytes": 9_000_000_000,
+                "free_bytes": 5_000_000_000,
+                "peak_allocated_bytes": 9_000_000_000,
+                "reserved_bytes": 9_500_000_000,
+                "total_bytes": 15_000_000_000,
+            },
+            "memory_before_load": {
+                "allocated_bytes": 0,
+                "free_bytes": 14_000_000_000,
+                "peak_allocated_bytes": 0,
+                "reserved_bytes": 0,
+                "total_bytes": 15_000_000_000,
+            },
+            "model": {
+                "file_count": 6,
+                "inventory_sha256": "1" * 64,
+                "total_bytes": 11_000_000_000,
+            },
+            "model_variable_bytes": 9_000_000_000,
+            "official_weights_loaded": True,
+            "tensorflow_gpu_visible": False,
+            "torch_version": "2.8.0",
+            "variable_bytes_by_device": {"cuda:0": 9_000_000_000},
+            "variable_bytes_by_dtype": {"float16": 9_000_000_000},
+            "weight_dtype": "float16",
+            "wheel": {
+                "archive_bytes": 1_525_623,
+                "member_count": 766,
+                "record_entries_verified": 765,
+                "sha256": validator.WHEEL_SHA256,
+            },
+        },
         "safety_limitations": ["one", "two", "three", "four"],
+        "failures": [],
         "notices": notices,
     }
 
@@ -50,6 +116,76 @@ class ProjectValidatorTests(unittest.TestCase):
 
     def test_valid_runtime_schema_passes(self):
         self.assertEqual(validator.validate_runtime_artifact(valid_runtime_artifact()), [])
+
+    def test_clone_owner_replacement_keeps_notebook_metadata_and_runtime_compatible(self):
+        owner = "testowner"
+        notebook_text = (
+            validator.ROOT / validator.NOTEBOOK_NAME
+        ).read_text(encoding="utf-8").replace(validator.OWNER_PLACEHOLDER, owner)
+        notebook = json.loads(notebook_text)
+        notebook_errors, _ = validator.validate_notebook(notebook)
+        self.assertEqual(notebook_errors, [])
+
+        metadata_text = (
+            validator.ROOT / validator.KERNEL_METADATA_NAME
+        ).read_text(encoding="utf-8").replace(validator.OWNER_PLACEHOLDER, owner)
+        self.assertEqual(validator.validate_metadata(json.loads(metadata_text)), [])
+
+        artifact = valid_runtime_artifact()
+        artifact["run_configuration"]["wheel_dataset_ref"] = (
+            f"{owner}/{validator.WHEEL_DATASET_SLUG}"
+        )
+        self.assertEqual(validator.validate_runtime_artifact(artifact), [])
+
+    def test_public_placeholder_cannot_claim_runtime_pass(self):
+        artifact = valid_runtime_artifact()
+        artifact["run_configuration"]["wheel_dataset_ref"] = validator.WHEEL_DATASET_REF
+        errors = validator.validate_runtime_artifact(artifact, require_pass=True)
+        self.assertIn("runtime wheel Dataset reference is invalid", errors)
+
+    def test_schema_and_validator_share_safe_runtime_owner_contract(self):
+        schema = json.loads(
+            (validator.ROOT / "schemas" / "demo_results.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        ref_contract = schema["properties"]["run_configuration"]["properties"][
+            "wheel_dataset_ref"
+        ]
+        self.assertEqual(set(ref_contract), {"type", "pattern"})
+        self.assertEqual(ref_contract["type"], "string")
+        pattern = ref_contract["pattern"]
+
+        safe_ref = f"safe-owner_2/{validator.WHEEL_DATASET_SLUG}"
+        self.assertIsNotNone(re.fullmatch(pattern, safe_ref))
+        self.assertEqual(
+            validator._wheel_dataset_owner(safe_ref, allow_placeholder=False),
+            "safe-owner_2",
+        )
+        artifact = valid_runtime_artifact()
+        artifact["run_configuration"]["wheel_dataset_ref"] = safe_ref
+        self.assertEqual(validator.validate_runtime_artifact(artifact), [])
+
+        unsafe_refs = (
+            validator.WHEEL_DATASET_REF,
+            f"Uppercase/{validator.WHEEL_DATASET_SLUG}",
+            f"-leading/{validator.WHEEL_DATASET_SLUG}",
+            f"owner/../{validator.WHEEL_DATASET_SLUG}",
+            "owner/wrong-wheel-dataset",
+        )
+        for unsafe_ref in unsafe_refs:
+            with self.subTest(unsafe_ref=unsafe_ref):
+                self.assertIsNone(re.fullmatch(pattern, unsafe_ref))
+                self.assertIsNone(
+                    validator._wheel_dataset_owner(
+                        unsafe_ref,
+                        allow_placeholder=False,
+                    )
+                )
+
+        readme = (validator.ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("replace the owner placeholder consistently", readme)
+        self.assertIn("safe clone owner bound to the pinned Dataset slug", readme)
 
     def test_wrong_model_ref_fails(self):
         artifact = valid_runtime_artifact()
@@ -72,7 +208,13 @@ class ProjectValidatorTests(unittest.TestCase):
         self.assertIn("set(expected) | {record_name}", notebook_source)
         self.assertIn("_read_bounded_json", notebook_source)
         self.assertIn("TF_FORCE_GPU_ALLOW_GROWTH", notebook_source)
-        self.assertIn("MAX_LENGTH = 2048", notebook_source)
+        self.assertIn("GENERATOR_MAX_LENGTH = 2048", notebook_source)
+        self.assertIn("VERIFIER_MAX_LENGTH = 3072", notebook_source)
+        self.assertIn("MIN_COMPLETION_TOKENS = 512", notebook_source)
+        self.assertIn('"KERAS_BACKEND": "torch"', notebook_source)
+        self.assertIn('tf.config.set_visible_devices([], "GPU")', notebook_source)
+        self.assertIn('with keras.device("gpu:0")', notebook_source)
+        self.assertIn("tokenizer prompt budget leaves fewer than 512 completion tokens", notebook_source)
         self.assertIn("_reject_duplicate_object_pairs", notebook_source)
         self.assertIn("write_runtime_journal", notebook_source)
         self.assertIn("runtime_journal.json", notebook_source)
@@ -102,6 +244,75 @@ class ProjectValidatorTests(unittest.TestCase):
     def test_public_cover_is_bounded_canonical_png(self):
         self.assertEqual(validator.validate_binary_assets(), [])
 
+    def test_public_video_tampering_type_and_size_fail_closed(self):
+        source_assets = validator.ROOT / "assets"
+        for case in ("tamper", "type", "size"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                assets = root / "assets"
+                assets.mkdir()
+                shutil.copyfile(source_assets / "cover.png", assets / "cover.png")
+                video = assets / "sahaaya-cards-fixture-prototype.mp4"
+                shutil.copyfile(source_assets / video.name, video)
+                with video.open("r+b") as handle:
+                    if case == "tamper":
+                        handle.seek(-1, 2)
+                        final = handle.read(1)
+                        handle.seek(-1, 2)
+                        handle.write(bytes([final[0] ^ 1]))
+                    elif case == "type":
+                        handle.seek(4)
+                        handle.write(b"nope")
+                    else:
+                        handle.truncate(validator.PUBLIC_VIDEO_MAX_BYTES + 1)
+                with mock.patch.object(validator, "ROOT", root):
+                    errors = validator.validate_binary_assets()
+                self.assertTrue(errors)
+
+    def test_public_docs_label_fixture_video_truthfully(self):
+        for name in (
+            "README.md",
+            "WRITEUP_DRAFT.md",
+            "SECURITY_AND_PRIVACY.md",
+            "ILLUSTRATIVE_OUTPUT.md",
+        ):
+            with self.subTest(name=name):
+                text = (validator.ROOT / name).read_text(encoding="utf-8")
+                self.assertIn("sahaaya-cards-fixture-prototype.mp4", text)
+                self.assertIn("hand-authored", text.lower())
+                self.assertRegex(text.lower(), r"not (?:a )?model")
+
+    def test_public_notebook_discloses_failed_runtime_evidence(self):
+        notebook = validator.load_json(validator.ROOT / validator.NOTEBOOK_NAME)
+        status_note = "".join(notebook["cells"][0]["source"])
+        for phrase in (
+            "NOT RUNTIME-PROVEN",
+            "V4",
+            "V5",
+            "V6",
+            "not model-generated",
+        ):
+            self.assertIn(phrase, status_note)
+
+    def test_public_docs_separate_version7_jax_diagnostic_from_app(self):
+        for name in (
+            "README.md",
+            "WRITEUP_DRAFT.md",
+            "SECURITY_AND_PRIVACY.md",
+            "DEPENDENCIES.md",
+        ):
+            with self.subTest(name=name):
+                text = (validator.ROOT / name).read_text(encoding="utf-8")
+                self.assertIn("Version 7", text)
+                self.assertIn("JAX", text)
+                self.assertIn("452.703", text)
+                self.assertIn("DIAGNOSTIC_FAILURE", text)
+                self.assertIn("model_load_started", text)
+
+        readme = (validator.ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Keras/Torch two-pass app", readme)
+        self.assertIn("no generation or Sahaaya Cards app pass occurred", readme)
+
     def test_publication_scan_rejects_pii_secret_and_local_path(self):
         sample = (
             "/" + "Users" + "/example/private.txt\n"
@@ -125,10 +336,90 @@ class ProjectValidatorTests(unittest.TestCase):
         self.assertTrue(any("did not pass" in error for error in errors))
         self.assertTrue(any("contains deterministic runtime errors" in error for error in errors))
 
+    def test_partial_artifact_cannot_be_a_publication_pass(self):
+        artifact = valid_runtime_artifact()
+        artifact["status"] = "PARTIAL"
+        artifact["failures"] = [{
+            "error_type": "MemoryError",
+            "failure_classification": "oom",
+            "stage": "model_load",
+        }]
+        errors = validator.validate_runtime_artifact(artifact, require_pass=True)
+        self.assertIn("runtime artifact status is not PASS", errors)
+        self.assertIn("PASS runtime artifact must contain no failures", errors)
+
+    def test_preflight_failure_artifact_remains_valid_diagnostic_evidence(self):
+        artifact = valid_runtime_artifact()
+        artifact["status"] = "PARTIAL"
+        artifact["runtime_provenance"] = {}
+        artifact["notices"] = []
+        artifact["failures"] = [{
+            "error_type": "MemoryError",
+            "failure_classification": "oom",
+            "stage": "model_load",
+        }]
+        self.assertEqual(
+            validator.validate_runtime_artifact(artifact, require_pass=False),
+            [],
+        )
+
+    def test_non_json_model_output_remains_bounded_failure_evidence(self):
+        artifact = valid_runtime_artifact()
+        artifact["status"] = "FAIL"
+        artifact["notices"] = artifact["notices"][:1]
+        artifact["notices"][0]["raw_final_answers"]["generator"] = "NOT JSON"
+        artifact["notices"][0]["parsed"]["generator"] = {}
+        artifact["notices"][0]["parsed"]["verifier"] = {}
+        artifact["notices"][0]["validation"] = {
+            "passed": False,
+            "errors": ["generator stage failed closed: JSONDecodeError"],
+        }
+        artifact["failures"] = [{
+            "error_type": "DeterministicGateFailure",
+            "failure_classification": "validation",
+            "stage": "final_gate",
+        }]
+        self.assertEqual(
+            validator.validate_runtime_artifact(artifact, require_pass=False),
+            [],
+        )
+
+    def test_runtime_journal_binds_exact_artifact_hash(self):
+        digest = "a" * 64
+        journal = {
+            "schema_version": "1.0",
+            "stage": "complete",
+            "updated_at_utc": "2030-01-01T00:00:00+00:00",
+            "details": {
+                "artifact_sha256": digest,
+                "completed_notices": 2,
+                "error_count": 0,
+                "status": "PASS",
+            },
+        }
+        self.assertEqual(validator.validate_runtime_journal(journal, digest), [])
+        self.assertTrue(validator.validate_runtime_journal(journal, "b" * 64))
+
+    def test_prompt_budget_reserve_is_enforced(self):
+        artifact = valid_runtime_artifact()
+        artifact["notices"][0]["token_budgets"]["generator"] = {
+            "completion_budget_tokens": 511,
+            "max_length": 2048,
+            "minimum_completion_tokens": 512,
+            "prompt_tokens": 1537,
+        }
+        errors = validator.validate_runtime_artifact(artifact)
+        self.assertTrue(any("violates the completion reserve" in error for error in errors))
+
     def test_network_import_is_rejected(self):
         errors = validator.scan_code_security("import requests\nrequests.get('example')\n")
         self.assertTrue(any("banned import" in error for error in errors))
         self.assertTrue(any("banned attribute call" in error for error in errors))
+
+    def test_obsolete_video_tool_inventory_reference_is_absent(self):
+        source = (validator.ROOT / "validate_project.py").read_text(encoding="utf-8")
+        self.assertNotIn("VIDEO_TOOL_FILES", source)
+        self.assertNotIn("validate_video_tools_inventory", source)
 
 
 if __name__ == "__main__":
