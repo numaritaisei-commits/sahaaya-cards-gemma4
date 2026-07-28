@@ -11,6 +11,7 @@ import json
 import stat
 import zipfile
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 
 EXPECTED_FILENAME = "keras_hub-0.28.0-py3-none-any.whl"
@@ -18,14 +19,19 @@ EXPECTED_SHA256 = "a28cb601f7fffb7f28add1bae8110459fc3ac7d9e2159453dfbda9e97271f
 EXPECTED_TOP_LEVEL = {"keras_hub", "keras_hub-0.28.0.dist-info"}
 FORBIDDEN_SUFFIXES = {
     ".a",
+    ".class",
     ".dylib",
     ".dll",
     ".exe",
+    ".jar",
     ".node",
     ".o",
     ".pyd",
+    ".pyc",
     ".so",
 }
+ALLOWED_FILE_SUFFIXES = {".py", ".txt"}
+ALLOWED_EXTENSIONLESS_NAMES = {"METADATA", "RECORD", "WHEEL"}
 MAX_ARCHIVE_BYTES = 2_000_000
 MAX_UNCOMPRESSED_BYTES = 12_000_000
 MAX_MEMBER_BYTES = 2_000_000
@@ -44,6 +50,87 @@ def record_digest(data: bytes) -> str:
     return encoded.rstrip(b"=").decode("ascii")
 
 
+def inspect_archive_members(archive: zipfile.ZipFile) -> dict[str, Any]:
+    """Validate every ZIP member before metadata reads or extraction."""
+    infos = archive.infolist()
+    names = [info.filename for info in infos]
+    if not names:
+        raise ValueError("empty wheel")
+    if len(names) != len(set(names)):
+        raise ValueError("duplicate ZIP member")
+
+    canonical_names: set[str] = set()
+    file_names: set[str] = set()
+    top_levels: set[str] = set()
+    total_size = 0
+    native_payloads = 0
+    symlinks = 0
+    for info in infos:
+        name = info.filename
+        member = PurePosixPath(name)
+        if not name or name.startswith("/") or member.is_absolute() or not member.parts:
+            raise ValueError("unsafe absolute or empty ZIP member path")
+        if ".." in member.parts or "\\" in name or "\x00" in name:
+            raise ValueError("malformed ZIP member path")
+        is_directory = info.is_dir()
+        canonical_name = member.as_posix() + ("/" if is_directory else "")
+        if name != canonical_name or canonical_name in canonical_names:
+            raise ValueError("non-canonical or colliding ZIP member path")
+        canonical_names.add(canonical_name)
+
+        mode = (info.external_attr >> 16) & 0o177777
+        file_type = stat.S_IFMT(mode)
+        if stat.S_ISLNK(mode):
+            symlinks += 1
+            raise ValueError("symlink member is forbidden")
+        if info.flag_bits & 0x1:
+            raise ValueError("encrypted ZIP member is forbidden")
+        if info.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}:
+            raise ValueError("unsupported ZIP compression method")
+        if info.file_size < 0 or info.file_size > MAX_MEMBER_BYTES:
+            raise ValueError("ZIP member exceeds size limit")
+
+        if is_directory:
+            if (
+                file_type not in {0, stat.S_IFDIR}
+                or info.file_size != 0
+                or info.compress_size != 0
+            ):
+                raise ValueError("malformed ZIP directory entry")
+        else:
+            if file_type not in {0, stat.S_IFREG}:
+                raise ValueError("ZIP special-file member is forbidden")
+            if mode & 0o111:
+                raise ValueError("executable ZIP member is forbidden")
+            suffix = member.suffix.lower()
+            if suffix in FORBIDDEN_SUFFIXES:
+                native_payloads += 1
+            elif (
+                suffix not in ALLOWED_FILE_SUFFIXES
+                and member.name not in ALLOWED_EXTENSIONLESS_NAMES
+            ):
+                raise ValueError("ZIP member suffix is not allowlisted")
+            file_names.add(name)
+
+        total_size += info.file_size
+        top_levels.add(member.parts[0])
+
+    if native_payloads:
+        raise ValueError("native or executable payload is forbidden")
+    if total_size > MAX_UNCOMPRESSED_BYTES:
+        raise ValueError("wheel expands beyond size limit")
+    if top_levels != EXPECTED_TOP_LEVEL:
+        raise ValueError("unexpected top-level wheel inventory")
+    return {
+        "file_names": file_names,
+        "member_count": len(infos),
+        "native_payloads": native_payloads,
+        "symlinks": symlinks,
+        "top_levels": top_levels,
+        "uncompressed_bytes": total_size,
+    }
+
+
 def audit(path: Path) -> dict[str, object]:
     if path.is_symlink() or not path.is_file():
         raise ValueError("wheel must be a regular non-symlink file")
@@ -56,35 +143,8 @@ def audit(path: Path) -> dict[str, object]:
         raise ValueError("wheel SHA-256 mismatch")
 
     with zipfile.ZipFile(path) as archive:
-        infos = archive.infolist()
-        names = [info.filename for info in infos]
-        if len(names) != len(set(names)):
-            raise ValueError("duplicate ZIP member")
-        if not names:
-            raise ValueError("empty wheel")
-
-        total_size = 0
-        top_levels: set[str] = set()
-        for info in infos:
-            member = PurePosixPath(info.filename)
-            if member.is_absolute() or ".." in member.parts or not member.parts:
-                raise ValueError("unsafe ZIP member path")
-            if "\\" in info.filename or "\x00" in info.filename:
-                raise ValueError("malformed ZIP member path")
-            mode = (info.external_attr >> 16) & 0o177777
-            if stat.S_ISLNK(mode):
-                raise ValueError("symlink member is forbidden")
-            if member.suffix.lower() in FORBIDDEN_SUFFIXES:
-                raise ValueError("native or executable payload is forbidden")
-            if info.file_size > MAX_MEMBER_BYTES:
-                raise ValueError("ZIP member exceeds size limit")
-            total_size += info.file_size
-            top_levels.add(member.parts[0])
-
-        if total_size > MAX_UNCOMPRESSED_BYTES:
-            raise ValueError("wheel expands beyond size limit")
-        if top_levels != EXPECTED_TOP_LEVEL:
-            raise ValueError("unexpected top-level wheel inventory")
+        inventory = inspect_archive_members(archive)
+        file_names = inventory["file_names"]
 
         dist_info = "keras_hub-0.28.0.dist-info"
         metadata = archive.read(f"{dist_info}/METADATA").decode("utf-8")
@@ -100,12 +160,15 @@ def audit(path: Path) -> dict[str, object]:
             raise ValueError("unexpected wheel compatibility tag")
 
         record_rows = list(csv.reader(io.StringIO(record_text)))
+        if any(len(row) != 3 for row in record_rows):
+            raise ValueError("malformed RECORD row")
+        record_names = [row[0] for row in record_rows]
+        if len(record_names) != len(set(record_names)):
+            raise ValueError("duplicate RECORD row")
         record_paths = {row[0] for row in record_rows}
-        if record_paths != set(names):
+        if record_paths != file_names:
             raise ValueError("RECORD inventory mismatch")
         for row in record_rows:
-            if len(row) != 3:
-                raise ValueError("malformed RECORD row")
             name, hash_field, size_field = row
             if name == record_name:
                 if hash_field or size_field:
@@ -121,13 +184,13 @@ def audit(path: Path) -> dict[str, object]:
 
     return {
         "archive_bytes": path.stat().st_size,
-        "member_count": len(names),
-        "native_payloads": 0,
+        "member_count": inventory["member_count"],
+        "native_payloads": inventory["native_payloads"],
         "record_entries_verified": len(record_rows) - 1,
         "sha256": digest,
         "status": "PASS",
-        "symlinks": 0,
-        "uncompressed_bytes": total_size,
+        "symlinks": inventory["symlinks"],
+        "uncompressed_bytes": inventory["uncompressed_bytes"],
     }
 
 
