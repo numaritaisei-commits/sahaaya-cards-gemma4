@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sahaaya-cards:runtime-demo-results:1.0",
+  "title": "Sahaaya Cards validated Gemma 4 runtime artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project", "generated_at_utc", "model_ref", "model_path", "run_configuration", "safety_limitations", "notices"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "project": {"const": "Sahaaya Cards"},
+    "generated_at_utc": {"type": "string", "minLength": 1, "maxLength": 80},
+    "model_ref": {"const": "keras/gemma4/keras/gemma4_instruct_2b/2"},
+    "model_path": {"const": "/kaggle/input/models/keras/gemma4/keras/gemma4_instruct_2b/2"},
+    "run_configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "framework", "backend", "weight_dtype", "keras_hub_version",
+        "wheel_dataset_ref", "wheel_sha256", "max_length", "sampler",
+        "strip_prompt", "tensorflow_gpu_growth", "internet_enabled",
+        "external_apis"
+      ],
+      "properties": {
+        "framework": {"const": "keras_hub"},
+        "backend": {"const": "jax"},
+        "weight_dtype": {"const": "float16"},
+        "keras_hub_version": {"const": "0.28.0"},
+        "wheel_dataset_ref": {"const": "YOUR_KAGGLE_USERNAME/verified-keras-hub-028-gemma4"},
+        "wheel_sha256": {"const": "a28cb601f7fffb7f28add1bae8110459fc3ac7d9e2159453dfbda9e97271fc87"},
+        "max_length": {"const": 2048},
+        "sampler": {"const": "greedy"},
+        "strip_prompt": {"const": true},
+        "tensorflow_gpu_growth": {"const": true},
+        "internet_enabled": {"const": false},
+        "external_apis": {"const": false}
+      }
+    },
+    "safety_limitations": {"type": "array", "minItems": 4, "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+    "notices": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/notice"}}
+  },
+  "$defs": {
+    "notice": {
+      "type": "object", "additionalProperties": false,
+      "required": ["notice_id", "source_sha256", "prompts", "raw_final_answers", "parsed", "timing_seconds", "validation"],
+      "properties": {
+        "notice_id": {"enum": ["SYN-FLOOD-001", "SYN-WATER-002"]},
+        "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "prompts": {"$ref": "#/$defs/textPair"},
+        "raw_final_answers": {"$ref": "#/$defs/textPair"},
+        "parsed": {
+          "type": "object", "additionalProperties": false, "required": ["generator", "verifier"],
+          "properties": {"generator": {"$ref": "#/$defs/generator"}, "verifier": {"$ref": "#/$defs/verifier"}}
+        },
+        "timing_seconds": {
+          "type": "object", "additionalProperties": false, "required": ["generator", "verifier", "total"],
+          "properties": {"generator": {"type": "number", "minimum": 0}, "verifier": {"type": "number", "minimum": 0}, "total": {"type": "number", "minimum": 0}}
+        },
+        "validation": {
+          "type": "object", "additionalProperties": false, "required": ["passed", "errors"],
+          "properties": {"passed": {"const": true}, "errors": {"type": "array", "maxItems": 0}}
+        }
+      }
+    },
+    "textPair": {
+      "type": "object", "additionalProperties": false, "required": ["generator", "verifier"],
+      "properties": {"generator": {"type": "string", "minLength": 1}, "verifier": {"type": "string", "minLength": 1}}
+    },
+    "generator": {
+      "type": "object", "additionalProperties": false, "required": ["notice_id", "fact_ledger", "cards", "uncertainties"],
+      "properties": {
+        "notice_id": {"type": "string", "minLength": 1, "maxLength": 40},
+        "fact_ledger": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"$ref": "#/$defs/fact"}},
+        "cards": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/card"}},
+        "uncertainties": {"type": "array", "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 800}}
+      }
+    },
+    "fact": {
+      "type": "object", "additionalProperties": false, "required": ["fact_id", "kind", "value", "source_quote"],
+      "properties": {
+        "fact_id": {"type": "string", "pattern": "^F[1-9][0-9]*$"},
+        "kind": {"enum": ["time", "place", "action", "contact", "constraint", "service", "warning"]},
+        "value": {"type": "string", "minLength": 1, "maxLength": 600},
+        "source_quote": {"type": "string", "minLength": 1, "maxLength": 800}
+      }
+    },
+    "card": {
+      "type": "object", "additionalProperties": false, "required": ["language", "headline", "source_fact_ids", "actions", "do_not_infer"],
+      "properties": {
+        "language": {"enum": ["en", "hi", "ta"]}, "headline": {"type": "string", "minLength": 1, "maxLength": 140},
+        "source_fact_ids": {"$ref": "#/$defs/factIds"},
+        "actions": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/action"}},
+        "do_not_infer": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 500}}
+      }
+    },
+    "action": {
+      "type": "object", "additionalProperties": false, "required": ["text", "fact_ids"],
+      "properties": {"text": {"type": "string", "minLength": 1, "maxLength": 260}, "fact_ids": {"$ref": "#/$defs/factIds"}}
+    },
+    "factIds": {"type": "array", "minItems": 1, "maxItems": 30, "uniqueItems": true, "items": {"type": "string", "pattern": "^F[1-9][0-9]*$"}},
+    "verifier": {
+      "type": "object", "additionalProperties": false,
+      "required": ["notice_id", "verdict", "checks", "unsupported_claims", "language_warnings", "safety_note"],
+      "properties": {
+        "notice_id": {"type": "string", "minLength": 1, "maxLength": 40}, "verdict": {"const": "PASS"},
+        "checks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/check"}},
+        "unsupported_claims": {"type": "array", "maxItems": 0}, "language_warnings": {"type": "array", "maxItems": 0},
+        "safety_note": {"type": "string", "minLength": 1, "maxLength": 800}
+      }
+    },
+    "check": {
+      "type": "object", "additionalProperties": false, "required": ["claim_path", "supported", "fact_ids", "explanation"],
+      "properties": {
+        "claim_path": {"type": "string", "minLength": 1, "maxLength": 100}, "supported": {"const": true},
+        "fact_ids": {"$ref": "#/$defs/checkFactIds"}, "explanation": {"type": "string", "minLength": 1, "maxLength": 800}
+      }
+    },
+    "checkFactIds": {"type": "array", "minItems": 0, "maxItems": 30, "uniqueItems": true, "items": {"type": "string", "pattern": "^F[1-9][0-9]*$"}}
+  }
+}
