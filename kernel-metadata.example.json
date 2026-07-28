@@ -1,0 +1,20 @@
+{
+  "id": "YOUR_KAGGLE_USERNAME/sahaaya-cards-gemma4-offline-civic-copilot",
+  "title": "Sahaaya Cards Gemma 4 Offline Civic Copilot",
+  "code_file": "sahaaya_cards_demo.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": false,
+  "dataset_sources": [
+    "YOUR_KAGGLE_USERNAME/verified-keras-hub-028-gemma4"
+  ],
+  "competition_sources": [
+    "build-with-gemma-ieee-cs-srmist-ktr"
+  ],
+  "kernel_sources": [],
+  "model_sources": [
+    "keras/gemma4/keras/gemma4_instruct_2b/2"
+  ]
+}

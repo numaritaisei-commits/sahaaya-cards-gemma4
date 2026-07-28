@@ -1,0 +1,3 @@
+# Integrity reference only. The runtime never invokes pip or a network installer.
+keras-hub==0.28.0 --hash=sha256:a28cb601f7fffb7f28add1bae8110459fc3ac7d9e2159453dfbda9e97271fc87
+
