@@ -4,7 +4,7 @@ Sahaaya Cards is a fixed research prototype over two fictional notices. It is no
 
 ## Runtime boundary
 
-- Private Kaggle notebook, free GPU, Internet disabled.
+- Private Kaggle notebook, free T4 x2, Internet disabled. Three measured development attempts remained incomplete because the available GPU or host memory was insufficient; this repository claims no successful model run.
 - Official Gemma 4 Kaggle Model plus one locally audited pure-Python KerasHub wheel Dataset.
 - No API key, Cookie, email address, phone number, user document, or other personal data.
 - No package installer, network fallback, subprocess, shell command, downloaded native executable, `eval`, or `exec`.
@@ -12,11 +12,10 @@ Sahaaya Cards is a fixed research prototype over two fictional notices. It is no
 
 ## Publication boundary
 
-This repository intentionally excludes credentials, private Kaggle metadata, wheel binaries, model weights, generated prompts and responses, runtime journals, raw result artifacts, video files, and local filesystem paths. `kernel-metadata.example.json` and `dataset-metadata.example.json` contain owner placeholders only.
+This repository intentionally excludes credentials, private Kaggle metadata, wheel binaries, model weights, generated prompts and responses, runtime journals, raw result artifacts, video files, and local filesystem paths. `kernel-metadata.example.json` and `dataset-metadata.example.json` contain owner placeholders only. `ILLUSTRATIVE_OUTPUT.md` is a hand-authored interface fixture; it is explicitly not a model output, runtime artifact, validator PASS, or translation-quality claim.
 
 The public validator uses an exact source allowlist, rejects symlinks, verifies the integrity manifest, checks the cover PNG header and dimensions, scans text sources for common secret/PII patterns and host-specific paths, and refuses to treat a Kaggle `COMPLETE` state as semantic proof. A downloaded runtime result must pass both its outer contract and the duplicate-key-safe evidence normalizer before any card can be rendered.
 
 ## Known limitations
 
 A deterministic PASS demonstrates only that the authored evidence chain is internally complete. It does not prove source authenticity, official endorsement, currentness, native-language fluency, or real-world safety. Production use would require authenticated sources, native-speaker review, accessibility testing, adversarial evaluation, and field trials.
-
