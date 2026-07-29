@@ -294,7 +294,7 @@ class ProjectValidatorTests(unittest.TestCase):
         ):
             self.assertIn(phrase, status_note)
 
-    def test_public_docs_separate_jax_diagnostics_from_app(self):
+    def test_public_docs_separate_jax_generation_smoke_from_app(self):
         for name in (
             "README.md",
             "WRITEUP_DRAFT.md",
@@ -313,10 +313,15 @@ class ProjectValidatorTests(unittest.TestCase):
                 self.assertIn("VALUE", text)
                 self.assertIn("model_load_started", text)
                 self.assertIn("weights_loaded=false", text)
+                self.assertIn("JAX weighted generation Version 3", text)
+                self.assertIn("498.684", text)
+                self.assertIn("WEIGHTED_GENERATION_PASS", text)
+                self.assertIn("feature-column", text)
 
         readme = (validator.ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("Keras/Torch two-pass app", readme)
         self.assertIn("no generation or Sahaaya Cards app pass occurred", readme)
+        self.assertIn("not an application pass", readme)
 
     def test_publication_scan_rejects_pii_secret_and_local_path(self):
         sample = (

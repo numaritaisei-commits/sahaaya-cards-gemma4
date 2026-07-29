@@ -63,7 +63,7 @@ record, package installer, network fallback, subprocess, dynamic import,
 telemetry, model weight, or wheel binary. Generated JSON would be treated as
 untrusted data, reject duplicate keys, and remain hidden from notebook logs.
 
-## Measured runtime evidence — incomplete
+## Measured runtime evidence — bounded generation, app incomplete
 
 This submission does **not** claim that Gemma 4 generated or verified a card.
 The Keras/Torch two-pass app had three Private, Internet-disabled Kaggle T4 x2
@@ -91,9 +91,22 @@ sanitized outputs passed the fail-closed validator, but the run ended after
 did not complete, and no generation, fact ledger, multilingual card,
 verification pass, or app artifact was produced.
 
-No attempt produced a validator-approved `demo_results.json`; therefore there
-is no model PASS rate, generation timing, translation-quality score, validated
-model-output video, or measured impact to report. The hand-authored
+JAX weighted generation Version 3 tested the corrective hypothesis rather than
+hiding that failure. It feature-column sharded the `(262144, 8960)` per-layer
+embedding across axis 1. In an Internet-disabled T4 x2 run, every official
+checkpoint weight was restored, full source and target tensor digests matched,
+and one non-empty greedy generation completed. The fail-closed terminal status
+was `WEIGHTED_GENERATION_PASS`: 498.684 seconds total, including 427.421 seconds
+to load and 43.298 seconds to generate. Exact source and sanitized outputs
+passed the dedicated validator.
+
+[The validated source and bounded outputs are public on Kaggle](https://www.kaggle.com/code/numaritaisei/sahaaya-cards-gemma4-jax-host-half-restore).
+
+That success is not an application pass. Version 3 did not run either Sahaaya
+Cards prompt, produce a fact ledger or multilingual card, execute the verifier,
+or create `demo_results.json`. Therefore there is still no app PASS rate,
+translation-quality score, validated model-output video, or measured impact to
+report. The hand-authored
 `ILLUSTRATIVE_OUTPUT.md` demonstrates only the proposed interface and is
 prominently labeled **not model-generated**.
 
@@ -102,10 +115,10 @@ uses the same two fictional notices and keeps that evidence boundary visible in
 every scene. It is hand-authored illustrative media, not model output, a
 validated translation, or proof of a successful runtime.
 
-The validated JAX structure evidence does not convert the checkpoint-loading
-failure into an application success. Completing the reviewed Keras/Torch app
-still requires a supported route that finishes weight loading and both model
-passes.
+The validated JAX structure and weighted generation evidence establish a
+working official-checkpoint inference route. They do not convert one bounded
+generation into application success. Completing the reviewed app still
+requires both model passes and the deterministic card-evidence gate.
 
 ## Value and responsible boundaries
 
