@@ -7,12 +7,16 @@ Sahaaya Cards is a fixed research prototype over two fictional notices. It is no
 - The Keras/Torch two-pass app uses a Private Kaggle notebook, free T4 x2, and
   Internet disabled. Its V4-V6 attempts remained incomplete, so this repository
   claims no successful app run.
-- The separate JAX Version 7 smoke also used an exact Private,
-  Internet-disabled T4 x2 run with only the official competition input, pinned
-  official model, and audited wheel Dataset. Source, server metadata, and the
-  extracted vendor tree passed validation; runtime ended after 452.703 seconds
-  as `DIAGNOSTIC_FAILURE` / `ValueError` at `model_load_started`. Weight loading,
-  generation, and application execution did not complete.
+- The JAX structure diagnostic Version 4 used an exact Private,
+  Internet-disabled T4 x2 run and completed in 44.350 seconds with
+  `STRUCTURE_SHARDING_PASS`. It used `load_weights=False`, so it validates model
+  structure and sharding only.
+- The JAX weighted diagnostic Version 1 used the same approved inputs and
+  layout. Its exact source, metadata, and sanitized outputs passed the
+  fail-closed validator, but it ended after 176.725 seconds as
+  `DIAGNOSTIC_FAILURE` / `VALUE` at `model_load_started` with
+  `weights_loaded=false` and `generation_attempted=false`. Cleanup completed;
+  full checkpoint restoration and application execution did not.
 - Official Gemma 4 Kaggle Model plus one locally audited pure-Python KerasHub wheel Dataset.
 - No API key, Cookie, email address, phone number, user document, or other personal data.
 - No package installer, network fallback, subprocess, shell command, downloaded native executable, `eval`, or `exec`.
@@ -23,8 +27,8 @@ Sahaaya Cards is a fixed research prototype over two fictional notices. It is no
 This repository intentionally excludes credentials, private Kaggle metadata,
 wheel binaries, model weights, generated prompts and responses, runtime
 journals, raw result artifacts, model/runtime videos, and local filesystem paths. This
-includes the private Version 7 diagnostic files; only their bounded, validated
-outcome is summarized here. `kernel-metadata.example.json` and
+includes the private JAX diagnostic files; only their bounded, validated
+outcomes are summarized here. `kernel-metadata.example.json` and
 `dataset-metadata.example.json` contain owner placeholders only.
 `ILLUSTRATIVE_OUTPUT.md` is a hand-authored interface fixture; it is explicitly
 not a model output, runtime artifact, validator PASS, or translation-quality
@@ -38,9 +42,10 @@ regular-file status, 20 MB bound, MP4 `ftyp` header, and exact SHA-256.
 
 The public validator uses an exact source allowlist, rejects symlinks, verifies the integrity manifest, checks the cover PNG header and dimensions, scans text sources for common secret/PII patterns and host-specific paths, and refuses to treat a Kaggle `COMPLETE` state as semantic proof. A downloaded runtime result must pass both its outer contract and the duplicate-key-safe evidence normalizer before any card can be rendered.
 
-The Version 7 source/metadata/vendor validator PASS establishes input and code
-provenance only. Its explicit `DIAGNOSTIC_FAILURE` cannot satisfy the app's
-runtime-artifact or semantic-evidence gates.
+The JAX sharding PASS establishes structure and layout feasibility only. The
+weighted artifacts establish one bounded checkpoint-restoration failure, not a
+model result. Neither can satisfy the app's runtime-artifact or semantic-evidence
+gates.
 
 ## Known limitations
 

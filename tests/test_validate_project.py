@@ -294,7 +294,7 @@ class ProjectValidatorTests(unittest.TestCase):
         ):
             self.assertIn(phrase, status_note)
 
-    def test_public_docs_separate_version7_jax_diagnostic_from_app(self):
+    def test_public_docs_separate_jax_diagnostics_from_app(self):
         for name in (
             "README.md",
             "WRITEUP_DRAFT.md",
@@ -303,11 +303,16 @@ class ProjectValidatorTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 text = (validator.ROOT / name).read_text(encoding="utf-8")
-                self.assertIn("Version 7", text)
-                self.assertIn("JAX", text)
-                self.assertIn("452.703", text)
+                self.assertIn("JAX structure diagnostic Version 4", text)
+                self.assertIn("44.350", text)
+                self.assertIn("STRUCTURE_SHARDING_PASS", text)
+                self.assertIn("load_weights=False", text)
+                self.assertIn("JAX weighted diagnostic Version 1", text)
+                self.assertIn("176.725", text)
                 self.assertIn("DIAGNOSTIC_FAILURE", text)
+                self.assertIn("VALUE", text)
                 self.assertIn("model_load_started", text)
+                self.assertIn("weights_loaded=false", text)
 
         readme = (validator.ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("Keras/Torch two-pass app", readme)
