@@ -17,6 +17,12 @@ Sahaaya Cards is a fixed research prototype over two fictional notices. It is no
   `DIAGNOSTIC_FAILURE` / `VALUE` at `model_load_started` with
   `weights_loaded=false` and `generation_attempted=false`. Cleanup completed;
   full checkpoint restoration and application execution did not.
+- JAX weighted generation Version 3 feature-column sharded the per-layer
+  embedding and completed in 498.684 seconds with
+  `WEIGHTED_GENERATION_PASS`. It restored every official checkpoint weight and
+  completed one bounded greedy generation on T4 x2. This was not an application
+  pass: no civic-notice prompt, card, translation, verifier, or app artifact was
+  produced.
 - Official Gemma 4 Kaggle Model plus one locally audited pure-Python KerasHub wheel Dataset.
 - No API key, Cookie, email address, phone number, user document, or other personal data.
 - No package installer, network fallback, subprocess, shell command, downloaded native executable, `eval`, or `exec`.
@@ -26,9 +32,9 @@ Sahaaya Cards is a fixed research prototype over two fictional notices. It is no
 
 This repository intentionally excludes credentials, private Kaggle metadata,
 wheel binaries, model weights, generated prompts and responses, runtime
-journals, raw result artifacts, model/runtime videos, and local filesystem paths. This
-includes the private JAX diagnostic files; only their bounded, validated
-outcomes are summarized here. `kernel-metadata.example.json` and
+journals, raw result artifacts, model/runtime videos, and local filesystem paths.
+Only bounded, validated JAX outcomes are summarized here; generated text and
+its hash remain unpublished. `kernel-metadata.example.json` and
 `dataset-metadata.example.json` contain owner placeholders only.
 `ILLUSTRATIVE_OUTPUT.md` is a hand-authored interface fixture; it is explicitly
 not a model output, runtime artifact, validator PASS, or translation-quality
@@ -42,10 +48,10 @@ regular-file status, 20 MB bound, MP4 `ftyp` header, and exact SHA-256.
 
 The public validator uses an exact source allowlist, rejects symlinks, verifies the integrity manifest, checks the cover PNG header and dimensions, scans text sources for common secret/PII patterns and host-specific paths, and refuses to treat a Kaggle `COMPLETE` state as semantic proof. A downloaded runtime result must pass both its outer contract and the duplicate-key-safe evidence normalizer before any card can be rendered.
 
-The JAX sharding PASS establishes structure and layout feasibility only. The
-weighted artifacts establish one bounded checkpoint-restoration failure, not a
-model result. Neither can satisfy the app's runtime-artifact or semantic-evidence
-gates.
+The JAX sharding PASS establishes structure and layout feasibility. The weighted
+artifacts preserve both the earlier checkpoint-restoration failure and the
+later bounded generation success. Neither satisfies the app's runtime-artifact
+or semantic-evidence gates.
 
 ## Known limitations
 

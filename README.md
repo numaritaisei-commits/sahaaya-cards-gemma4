@@ -14,8 +14,8 @@ Kaggle T4 x2 attempts remained incomplete: V4 ended during direct GPU model
 loading with an out-of-memory error, V5 was killed during CPU staging after
 host memory exhaustion, and V6 did not reach validated end-to-end generation.
 
-Two separate JAX model-parallel diagnostics narrow the runtime boundary without
-establishing an application pass. The JAX structure diagnostic Version 4
+A sequence of JAX model-parallel diagnostics narrowed the runtime boundary
+without establishing an application pass. The JAX structure diagnostic Version 4
 completed in 44.350 seconds with `STRUCTURE_SHARDING_PASS`: 1,951 distinct
 variables, 248 layout-matched variables sharded across two T4 GPUs,
 10,822,965,702 global variable bytes, 6,208,838,086 estimated per-device bytes,
@@ -31,11 +31,24 @@ sanitized outputs passed the fail-closed validator, but the run ended after
 `generation_attempted=false`; cleanup completed. Full checkpoint restoration
 did not complete, and no generation or Sahaaya Cards app pass occurred.
 
-Accordingly, this repository claims no generated card, successful app runtime,
-PASS rate, translation quality, or measured social impact. The visual example
-in `ILLUSTRATIVE_OUTPUT.md` is hand-authored solely to explain the interface and
-is **not model-generated**. The JAX results are diagnostic evidence for a
-distinct loading route, not evidence for the Keras/Torch two-pass application.
+JAX weighted generation Version 3 then tested one measured correction: the
+`(262144, 8960)` per-layer embedding was feature-column sharded across axis 1
+instead of vocabulary-row sharded. In an Internet-disabled T4 x2 run, it
+restored every official checkpoint weight, verified the full source and target
+tensor digests, and completed one non-empty greedy generation. The terminal
+status was `WEIGHTED_GENERATION_PASS`; total runtime was 498.684 seconds and
+generation took 43.298 seconds. Exact source and sanitized outputs passed the
+fail-closed validator.
+
+[Inspect the validated public Kaggle notebook](https://www.kaggle.com/code/numaritaisei/sahaaya-cards-gemma4-jax-host-half-restore).
+
+This is a bounded model-loading and generation proof, not an application pass.
+It did not run either Sahaaya Cards prompt, create a fact ledger or multilingual
+card, execute the verifier, or produce `demo_results.json`. Accordingly, this
+repository still claims no generated card, successful app runtime, app PASS
+rate, translation quality, or measured social impact. The visual example in
+`ILLUSTRATIVE_OUTPUT.md` is hand-authored solely to explain the interface and is
+**not model-generated**.
 
 [Watch the 114-second silent fixture walkthrough](assets/sahaaya-cards-fixture-prototype.mp4).
 It is a hand-authored, fixture-only visualization of the proposed interface—not
@@ -73,17 +86,19 @@ The notebook does not blindly install the KerasHub wheel. Before import it check
 
 This contract describes the public Keras/Torch two-pass app. The separate JAX
 probes used the same pinned official model and audited wheel to test
-model-parallel construction, sharding, and checkpoint restoration only; they
-did not execute either app prompt or produce a card artifact.
+model-parallel construction, sharding, checkpoint restoration, and one bounded
+greedy generation. They did not execute either app prompt or produce a card
+artifact.
 
 Generation uses a 2048-token total-sequence budget and verification uses 3072; the official tokenizer must prove that at least 512 completion tokens remain before either call. TensorFlow GPU visibility is disabled before Keras import, Torch must see exactly two T4 GPUs, and the reviewed variables must be plain `float16` on `cuda:0`. An atomic `runtime_journal.json` records only bounded status, counts, failure class, and hashes. Model JSON and model-returned JSON are bounded, duplicate object keys and undeclared schema fields are rejected, and each strict-JSON raw final answer must be semantically identical to its parsed object before rendering.
 
-These are source-level implementation facts, not runtime-success evidence.
 V4-V6 show that the tested Keras/Torch memory routes were insufficient. The JAX
-structure diagnostic establishes task-structure and sharding feasibility,
-while the weighted diagnostic stops inside checkpoint restoration before
-inference. There is no
-alternate model, network install, fabricated result, or unverified fallback.
+structure diagnostic establishes task-structure and sharding feasibility; the
+failed weighted Version 1 binds the prior restore boundary; and the validated
+weighted generation Version 3 proves that feature-column sharding can restore
+the official checkpoint and complete one bounded inference on T4 x2. It does
+not prove the application. There is no alternate model, network install,
+fabricated result, or unverified fallback.
 
 ## Reproducible artifact chain
 

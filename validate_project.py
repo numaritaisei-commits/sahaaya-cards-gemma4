@@ -1129,7 +1129,7 @@ def run_static_checks(
         if journal_path is not None:
             errors.append("--journal cannot be validated without --runtime")
         warnings.append(
-            "no validated app artifact exists; Keras/Torch app V4-V6 were incomplete, JAX structure Version 4 was unweighted-only, and JAX weighted Version 1 failed before checkpoint restoration"
+            "no validated app artifact exists; Keras/Torch app V4-V6 were incomplete, while JAX weighted generation Version 3 restored the official checkpoint and completed one bounded generation without running the app prompts or evidence gate"
         )
         checks["runtime_artifact"] = "NOT_RUN"
 
