@@ -14,19 +14,28 @@ Kaggle T4 x2 attempts remained incomplete: V4 ended during direct GPU model
 loading with an out-of-memory error, V5 was killed during CPU staging after
 host memory exhaustion, and V6 did not reach validated end-to-end generation.
 
-A separate JAX model-parallel smoke, Version 7, ran on an official Private,
-Internet-disabled T4 x2 session with only the official competition input,
-pinned official Gemma 4 model, and audited wheel Dataset. Its exact source,
-server-normalized metadata, and extracted pure-Python vendor tree passed the
-dedicated validator. The bounded runtime itself ended after 452.703 seconds as
-`DIAGNOSTIC_FAILURE` / `ValueError` at `model_load_started`. Model weight loading
-did not complete; no generation or Sahaaya Cards app pass occurred.
+Two separate JAX model-parallel diagnostics narrow the runtime boundary without
+establishing an application pass. The JAX structure diagnostic Version 4
+completed in 44.350 seconds with `STRUCTURE_SHARDING_PASS`: 1,951 distinct
+variables, 248 layout-matched variables sharded across two T4 GPUs,
+10,822,965,702 global variable bytes, 6,208,838,086 estimated per-device bytes,
+and 127 bounded collisions with maximum kind `SAFE_SHAPE_VARIANT`. It used
+`load_weights=False`; this proves only that the reviewed model structure and
+layout instantiated and sharded.
+
+The JAX weighted diagnostic Version 1 used the same pinned model, audited
+wheel, runtime versions, and layout. Its exact source, server metadata, and
+sanitized outputs passed the fail-closed validator, but the run ended after
+176.725 seconds as `DIAGNOSTIC_FAILURE` / `VALUE` at `model_load_started`.
+`official_checkpoint_restored=false`, `weights_loaded=false`, and
+`generation_attempted=false`; cleanup completed. Full checkpoint restoration
+did not complete, and no generation or Sahaaya Cards app pass occurred.
 
 Accordingly, this repository claims no generated card, successful app runtime,
 PASS rate, translation quality, or measured social impact. The visual example
 in `ILLUSTRATIVE_OUTPUT.md` is hand-authored solely to explain the interface and
-is **not model-generated**. Version 7 is diagnostic evidence for a distinct JAX
-loading route, not evidence for the Keras/Torch two-pass application.
+is **not model-generated**. The JAX results are diagnostic evidence for a
+distinct loading route, not evidence for the Keras/Torch two-pass application.
 
 [Watch the 114-second silent fixture walkthrough](assets/sahaaya-cards-fixture-prototype.mp4).
 It is a hand-authored, fixture-only visualization of the proposed interface—not
@@ -62,18 +71,19 @@ The implementation defines two separate calls with separate outputs. If generati
 
 The notebook does not blindly install the KerasHub wheel. Before import it checks the pinned archive SHA-256, size bounds, pure-Python tag, canonical path and directory encoding, regular-file type, a narrow file-suffix allowlist, complete wheel `RECORD`, and every recorded member digest. It extracts to a new local directory, verifies the extracted inventory again, and confirms that the imported KerasHub 0.28.0 package came from that directory. It separately inspects bounded model JSON and the attached inventory for `Gemma4Backbone`, `Gemma4CausalLM`, and the expected shards before loading `Gemma4CausalLM.from_preset(..., dtype="float16")`.
 
-This contract describes the public Keras/Torch two-pass app. The separate
-Version 7 JAX smoke used the same pinned official model and audited wheel to
-test model-parallel loading only; it did not execute either app prompt or
-produce a card artifact.
+This contract describes the public Keras/Torch two-pass app. The separate JAX
+probes used the same pinned official model and audited wheel to test
+model-parallel construction, sharding, and checkpoint restoration only; they
+did not execute either app prompt or produce a card artifact.
 
 Generation uses a 2048-token total-sequence budget and verification uses 3072; the official tokenizer must prove that at least 512 completion tokens remain before either call. TensorFlow GPU visibility is disabled before Keras import, Torch must see exactly two T4 GPUs, and the reviewed variables must be plain `float16` on `cuda:0`. An atomic `runtime_journal.json` records only bounded status, counts, failure class, and hashes. Model JSON and model-returned JSON are bounded, duplicate object keys and undeclared schema fields are rejected, and each strict-JSON raw final answer must be semantically identical to its parsed object before rendering.
 
 These are source-level implementation facts, not runtime-success evidence.
-V4-V6 show that the tested Keras/Torch memory routes were insufficient; Version
-7 shows only a validated JAX diagnostic that reached `model_load_started` and
-then failed closed. There is no alternate model, network install, fabricated
-result, or unverified fallback.
+V4-V6 show that the tested Keras/Torch memory routes were insufficient. The JAX
+structure diagnostic establishes task-structure and sharding feasibility,
+while the weighted diagnostic stops inside checkpoint restoration before
+inference. There is no
+alternate model, network install, fabricated result, or unverified fallback.
 
 ## Reproducible artifact chain
 

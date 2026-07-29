@@ -73,14 +73,23 @@ development attempts:
 - V5 attempted CPU staging and was killed after host memory exhaustion.
 - V6 also failed to reach validated end-to-end generation under the available memory.
 
-Separately, Version 7 tested a JAX model-parallel loading route; it was not the
-two-pass app. The official run was Private, Internet-disabled, T4 x2, and used
-only the official competition input, pinned official Gemma 4 model, and audited
-wheel Dataset. Its exact source, server-normalized metadata, and extracted
-vendor tree passed the dedicated validator. The runtime report was
-`DIAGNOSTIC_FAILURE` / `ValueError` at `model_load_started` after 452.703
-seconds. Weight loading never completed, so this smoke produced no generation,
-fact ledger, multilingual card, verification pass, or app artifact.
+Two separate JAX model-parallel diagnostics narrow the runtime boundary without
+establishing an application pass. The JAX structure diagnostic Version 4
+completed in 44.350 seconds with `STRUCTURE_SHARDING_PASS`: 1,951 distinct
+variables, 248 layout-matched variables sharded across two T4 GPUs,
+10,822,965,702 global variable bytes, 6,208,838,086 estimated per-device bytes,
+and 127 bounded collisions with maximum kind `SAFE_SHAPE_VARIANT`. It used
+`load_weights=False`; this proves only that the reviewed model structure and
+layout instantiated and sharded.
+
+The JAX weighted diagnostic Version 1 used the same pinned model, audited
+wheel, runtime versions, and layout. Its exact source, server metadata, and
+sanitized outputs passed the fail-closed validator, but the run ended after
+176.725 seconds as `DIAGNOSTIC_FAILURE` / `VALUE` at `model_load_started`.
+`official_checkpoint_restored=false`, `weights_loaded=false`, and
+`generation_attempted=false`; cleanup completed. Full checkpoint restoration
+did not complete, and no generation, fact ledger, multilingual card,
+verification pass, or app artifact was produced.
 
 No attempt produced a validator-approved `demo_results.json`; therefore there
 is no model PASS rate, generation timing, translation-quality score, validated
@@ -93,9 +102,10 @@ uses the same two fictional notices and keeps that evidence boundary visible in
 every scene. It is hand-authored illustrative media, not model output, a
 validated translation, or proof of a successful runtime.
 
-The validated Version 7 provenance does not convert a loading failure into an
-application success. Completing the reviewed Keras/Torch app still requires a
-supported route that finishes weight loading and both model passes.
+The validated JAX structure evidence does not convert the checkpoint-loading
+failure into an application success. Completing the reviewed Keras/Torch app
+still requires a supported route that finishes weight loading and both model
+passes.
 
 ## Value and responsible boundaries
 
